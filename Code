@@ -1,0 +1,53 @@
+# head-mri
+
+import cv2
+import numpy as np
+from skimage import measure
+from skimage.measure import regionprops
+import matplotlib.pyplot as plt
+
+class BrainTumorAnalysis:
+    def __init__(self, image_path):
+        self.image_path = image_path
+        self.image = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
+        if self.image is None:
+            raise ValueError("Image cannot be loaded, double check file path.")
+        self.tumor_present = False
+        self.tumor_type = "No tumor"
+        self.tumor_size = (0, 0)
+        self.tumor_position = (0, 0)
+        self.process_image = None
+        self.tumor_mask = None
+
+    def analyze(self):
+        self._preprocess_image()
+        self._detect_tumor()
+        if self.tumor_present:
+            self._analyze_tumor()
+            self._measure_size()
+
+    def _preprocess_image(self):
+        blurred = cv2.GaussianBlur(self.image, (5, 5), 0)
+        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+        self.process_image = clahe.apply(blurred)
+
+    def _detect_tumor(self):
+        threshold = cv2.adaptiveThreshold(
+            self.process_image, 255,
+            cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+            cv2.THRESH_BINARY, 11, 2)
+
+        kernel = np.ones((3, 3), np.uint8)
+        cleaned = cv2.morphologyEx(threshold, cv2.MORPH_OPEN, kernel, iterations=2)
+        cleaned = cv2.morphologyEx(threshold, cv2.MORPH_OPEN, kernel, iterations=4)
+        labels = measure.label(cleaned)
+        regions = regionprops(labels)
+        height, width = self.image.shape
+        min_area = 0.005 * height * width
+        max_area = 0.3 * height * width
+        potench_tumors = []
+        for region in regions:
+            if min_area < region.area < max_area:
+              mean_intensity = np.mean(self.image[region.coords[:,0]:region.coords[:,1]])
+              if mean_intensity > np.mean(self.image) * 1.2:
+                potench_tumors.append(region)    
